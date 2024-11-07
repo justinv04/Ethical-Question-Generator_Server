@@ -15,13 +15,13 @@ static const string AUTH_SECRET_KEY = "4f27e852b53d811f5a5064e5d490ca470417a3a79
 
 class Auth_Handler {
     public:
-        static string createJWT(const string user_ID, const string user_Name) {
+        static string createJWT(const int user_ID, const string user_Name) {
 
             string token = jwt::create()
                             .set_issuer(AUTH_ISSUER)
                             .set_subject(user_Name)         
-                            .set_id(user_ID)                    
-                            .set_expires_at(std::chrono::system_clock::now() + std::chrono::seconds(1))
+                            .set_id(std::to_string(user_ID))                    
+                            .set_expires_at(std::chrono::system_clock::now() + std::chrono::hours(1))
                             .sign(jwt::algorithm::hs256{AUTH_SECRET_KEY}); 
 
             return JSON_Handler::pairsToJSON<string>({{"Auth_Token", token}});

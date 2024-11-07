@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sstream>
 #include <utility>
+#include <map>
 #include <vector>
 
 #include "Database_Handler.cpp"
@@ -12,9 +13,28 @@
 using std::string;
 using std::vector;
 using std::pair;
+using std::map;
 
 static const string SERVER_URL = "http://127.0.0.1:8080",
                     CLIENT_URL = "http://127.0.0.1:8081";
+
+static const string SERVER_OPTIONS_APPENDIX =
+    "Access-Control-Allow-Origin: " + CLIENT_URL + "\r\n"
+    "Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n"
+    "Access-Control-Allow-Headers: Content-Type, Authorization\r\n"
+    "Access-Control-Max-Age: 3600\r\n";
+
+static const string RESPONSE_404 =
+    "HTTP/1.1 404 Not Found\r\n"
+    "Content-Type: text/plain\r\n"
+    "Content-Length: 13\r\n\r\n"
+    "404 Not Found";
+
+static const string RESPONSE_401 =
+    "HTTP/1.1 401 Unauthorized\r\n"
+    "Content-Type: text/plain\r\n"
+    "Content-Length: 22\r\n\r\n"
+    "User Not Unauthorized";
 
 enum class REQUEST_TYPE {
     CON,            // CONNECT - Establish a network connection to a resource
@@ -27,6 +47,18 @@ enum class REQUEST_TYPE {
     OPT,            // OPTION - Request communication options available for a resource
     TRC,            // TRACE - Echo back the received request (used for debugging)
     UNK             // Unable to establish type
+};
+
+static map<int, string> STATUS_CODE_MAP = {
+    {200, "OK"},
+    {201, "Created"},
+    {202, "Accepted"},
+    {204, "No Content"},
+
+    {400, "Bad Request"},
+    {401, "Unauthorized"},
+    {403, "Forbidden"},
+    {404, "Not Found"}
 };
 
 class HTTP_Handler {
@@ -54,80 +86,75 @@ class HTTP_Handler {
         };
 
         string handleGetRequest(const string endpoint) {
-            string content;
+            int status;
+            string content_type, content;
+            vector<pair<string, string>> data;
 
-            if(endpoint == "ping")
+            if(endpoint == "ping") {
                 content = "hi there ;)";
-            
-            return JSON_Handler::make_Response(200, "OK", "application/json", content);
+
+            }
+            else if(endpoint == "") {
+                
+            }
+
+            status = 200, content_type = "application/json";
+            return makeResponse(status, content_type, content);
         };
 
         string handlePostRequest(const string endpoint, const string data_str) {
-            string content;
+            int status;
+            string content_type, content;
             vector<pair<string, string>> data;
 
             if(endpoint == "login") {
-                data = JSON_Handler::parseToPairs<string>(data_str);
-                content = Database_Handler::authenticateUser(data.at(0).second, data.at(1).second);
+                content_type = "application/json";
+                data = JSON_Handler::jsonToPairs<string>(data_str);
+                content = Database_Handler::loginUser(data.at(0).second /* name */, data.at(1).second /* passhash */);
             }
             else if(endpoint == "create_user") {
-                data = JSON_Handler::parseToPairs<string>(data_str);
-                content = Database_Handler::createUser(data.at(0).second, data.at(1).second, data.at(2).second, data.at(3).second);
+                content_type = "application/json";
+                data = JSON_Handler::jsonToPairs<string>(data_str);
+                content = Database_Handler::createUser(data.at(0).second /* name */, data.at(1).second /* email */, data.at(2).second /* password hash */);
             }
 
-            return JSON_Handler::make_Response(200, "OK", "application/json", content);
+            status = 200;
+            return makeResponse(status, content_type, content);
         };
 
-    public: 
-
-        const string SERVER_OPTIONS_RESPONSE =
-            "HTTP/1.1 204 No Content\r\n"
-            "Access-Control-Allow-Origin: " + CLIENT_URL + "\r\n"
-            "Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n"
-            "Access-Control-Allow-Headers: Authorization, Content-Type\r\n"
-            "Access-Control-Max-Age: 3600\r\n"
-            "Connection: keep-alive\r\n\r\n";
-
-        const string RESPONSE_404 =
-            "HTTP/1.1 404 Not Found\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: 42\r\n\r\n"
-            "<html><body>404 Not Found</body></html>";
-
-        const string RESPONSE_401 =
-            "HTTP/1.1 401 Unauthorized\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: 22\r\n\r\n"
-            "User Not Unauthorized";
-
-        string handleRequest(const string request) {
-            string type_str, endpoint_str, auth_str, data_str;
+        static void parseRequestElements(const string &request, string &type, string &endpoint, string &auth_token, string &data) {
             size_t index = 0;
 
             while(request[index] != ' ') 
-                type_str += request[index++];
+                type += request[index++];
 
             index += 2;
 
             while(request[index] != ' ')
-                endpoint_str += request[index++];
+                endpoint += request[index++];
 
             index = request.find("Authorization:") + 22;
 
             while(request[index] != '\r')
-                auth_str += request[index++];
+                auth_token += request[index++];
 
             index = request.find("\r\n\r\n") + 4;
-            data_str = request.substr(index, request.length() - index);
+            data = request.substr(index, request.length() - index);
+        }
 
-            string content;
+    public: 
+
+        string handleRequest(const string request) {
+            string type_str, endpoint_str, auth_str, data_str;
+            parseRequestElements(request, type_str, endpoint_str, auth_str, data_str);
+
             REQUEST_TYPE request_type = getRequestType(type_str);
-
             if(request_type != OPT && endpoint_str != "login") {
                 if(!Auth_Handler::validateJWT(auth_str))
                     return RESPONSE_401;
             }
 
+            string content;
             switch(request_type) {
                 case GET: {
                     content = handleGetRequest(endpoint_str);
@@ -138,11 +165,23 @@ class HTTP_Handler {
                     break;
                 }
                 case OPT: {
-                    content = SERVER_OPTIONS_RESPONSE;
+                    content = makeResponse(204);
                     break;
                 }
                 default: content = RESPONSE_404;
             }
             return content;
+        };
+
+        static string makeResponse(const int status, const string content_type = "", const string content = "") {
+            string response = "HTTP/1.1 " + std::to_string(status) + " " + STATUS_CODE_MAP[status] + "\r\n";
+                
+            if(status != 204)
+                response += ("Content-Type: " + content_type + "\r\n");
+            
+            response += SERVER_OPTIONS_APPENDIX;
+            response += ("Content-Length: " + std::to_string(content.length()) + "\r\nConnection: keep-alive\r\n\r\n" + content);
+
+            return response;
         };
 };
