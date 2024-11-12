@@ -104,6 +104,9 @@ class Database_Handler {
         }
 
     public:
+
+        /* User */
+
         static string loginUser(const string username, const string passhash) {
             string query =  "SELECT * "
                             "FROM Users "
@@ -111,11 +114,21 @@ class Database_Handler {
 
             vector<User> data = JSON_Handler::parseUsers(getQueryJSON(query.c_str()));
 
-            if(data.size() == 1 && data[0].name == username && data[0].passhash == passhash)
-                return Auth_Handler::createJWT(data[0].id, data[0].name);
+            if(data.size() != 1)
+                return "{\"Auth_Token\":\"Failed_Login\"}";
+
+            User curr_user = data[0];            
+            if(curr_user.name == username && curr_user.passhash == passhash) {
+                vector<pair<string, string>> responseData;
+                responseData.push_back({"Auth_Token", Auth_Handler::createJWT(data[0].id, data[0].name)});
+                responseData.push_back({"User_ID", std::to_string(curr_user.id)});
+                responseData.push_back({"User_Name", curr_user.name}); 
+
+                return JSON_Handler::pairsToJSON(responseData);
+            }
             
             return "{\"Auth_Token\":\"Failed_Login\"}";
-        };
+        }
 
         static string createUser(const string name, const string email, const string passhash) {
             std::time_t currentTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -149,19 +162,50 @@ class Database_Handler {
                 return Auth_Handler::createJWT(data[0].id, name);
             
             return "{\"Auth_Token\":\"Failed_Creation\"}";
-        };
+        }
 
-        static string getAllUserReports(const size_t user_id) {
-            string query =  "SELECT Reports.Report_ID, Reports.User_ID, Questions.Question_Text, Questions.Questions_Topics "
+        /* Reports */
+
+        static string generateReport(const string user_id, const string question_id, const string user_position, const string report_date) {
+
+            string query = "INSERT INTO Reports "
+                            "(User_ID, Question_ID, User_Position, Report_Date) "
+                            "VALUES ('"
+                            + user_id + "', '"
+                            + question_id + "', '" 
+                            + user_position + "', '" 
+                            + report_date + 
+                            "');";
+
+            return getQueryJSON(query.c_str());
+        }
+
+        static string getUserReports(const string user_id, const string topic = "") {
+            string query =  "SELECT Questions.Question_ID, Questions.Question_Text, Questions.Question_Topic, Reports.User_Position, Reports.Report_Date "
                             "FROM Reports "
                             "INNER JOIN Questions ON Questions.Question_ID = Reports.Question_ID "
-                            "WHERE User_ID = " + std::to_string(user_id) + " "
-                            "ORDER BY Report_Date DESC;";
+                            "WHERE User_ID = '" + user_id + "' ";
 
-            string query_json = getQueryJSON(query.c_str());
-            if(query_json.substr(0, 13) != "Query Failed:") {
-                return query_json;
-            }
+            if(topic != "")
+                query += "WHERE Question_Topic = '" + topic + "' ";
+
+            query += "ORDER BY Question_ID DESC;";
+
+            return getQueryJSON(query.c_str());
+        }
+
+        /* Questions */
+
+        static string getQuestion(const string topic = "") {
+            string query =  "SELECT * "
+                            "FROM Questions ";
+
+            if(topic != "")
+                query += "WHERE Question_Topic = '" + topic + "' ";
+
+            query += "ORDER BY RAND() LIMIT 1";
+
+            return getQueryJSON(query.c_str());
         }
 };
 

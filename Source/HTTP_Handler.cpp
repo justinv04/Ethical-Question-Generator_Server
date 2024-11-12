@@ -9,6 +9,7 @@
 #include "Database_Handler.cpp"
 #include "JSON_Handler.cpp"
 #include "Auth_Handler.cpp"
+#include "CGPT_Handler.cpp"
 
 using std::string;
 using std::vector;
@@ -85,18 +86,10 @@ class HTTP_Handler {
             }
         };
 
-        string handleGetRequest(const string endpoint) {
+        string handleGetRequest(const string endpoint, const string data_str) {
             int status;
             string content_type, content;
             vector<pair<string, string>> data;
-
-            if(endpoint == "ping") {
-                content = "hi there ;)";
-
-            }
-            else if(endpoint == "") {
-                
-            }
 
             status = 200, content_type = "application/json";
             return makeResponse(status, content_type, content);
@@ -105,20 +98,29 @@ class HTTP_Handler {
         string handlePostRequest(const string endpoint, const string data_str) {
             int status;
             string content_type, content;
-            vector<pair<string, string>> data;
+            vector<pair<string, string>> data = JSON_Handler::jsonToPairs<string>(data_str);
 
             if(endpoint == "login") {
-                content_type = "application/json";
-                data = JSON_Handler::jsonToPairs<string>(data_str);
                 content = Database_Handler::loginUser(data.at(0).second /* name */, data.at(1).second /* passhash */);
             }
             else if(endpoint == "create_user") {
-                content_type = "application/json";
-                data = JSON_Handler::jsonToPairs<string>(data_str);
-                content = Database_Handler::createUser(data.at(0).second /* name */, data.at(1).second /* email */, data.at(2).second /* password hash */);
+                content = Database_Handler::createUser(data.at(0).second /* name */, data.at(1).second /* email */, data.at(2).second /* passhash */);
+            }
+            else if(endpoint == "get_question") {
+                content = Database_Handler::getQuestion(data.at(0).second /* topic */);
+            }
+            else if(endpoint == "generate_question") {
+                content = CGPT_Handler::getQuestion();
+            }
+            else if(endpoint == "get_reports") {
+                content = Database_Handler::getUserReports(data.at(0).second /* user_id */, data.at(1).second /* topic */);
+            }
+            else if(endpoint == "generate_report") {
+                content = Database_Handler::generateReport(data.at(0).second /* user_id */, data.at(1).second /* question_id */, data.at(2).second /* position */, data.at(3).second /* date */);
             }
 
             status = 200;
+            content_type = "application/json";
             return makeResponse(status, content_type, content);
         };
 
@@ -157,7 +159,7 @@ class HTTP_Handler {
             string content;
             switch(request_type) {
                 case GET: {
-                    content = handleGetRequest(endpoint_str);
+                    content = handleGetRequest(endpoint_str, data_str);
                     break;
                 }
                 case POS: {

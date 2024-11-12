@@ -33,6 +33,7 @@ add_executable  (   http-server
                     ${SOURCE_DIR}/Server.cpp
                     ${SOURCE_DIR}/Database_Handler.cpp
                     ${SOURCE_DIR}/JSON_Handler.cpp
-                    ${SOURCE_DIR}/Auth_Handler.cpp      )
+                    ${SOURCE_DIR}/Auth_Handler.cpp
+                    ${SOURCE_DIR}/CGPT_Handler.cpp      )
 
 set(CMAKE_VERBOSE_MAKEFILE OFF)

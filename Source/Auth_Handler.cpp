@@ -24,7 +24,7 @@ class Auth_Handler {
                             .set_expires_at(std::chrono::system_clock::now() + std::chrono::hours(1))
                             .sign(jwt::algorithm::hs256{AUTH_SECRET_KEY}); 
 
-            return JSON_Handler::pairsToJSON<string>({{"Auth_Token", token}});
+            return token;
         }
 
         static bool validateJWT(const string token) {
